@@ -9,6 +9,25 @@ from mmedit.models.registry import BACKBONES
 from mmedit.utils import get_root_logger
 
 
+def pixel_unshuffle(x, scale):
+    """ Pixel unshuffle.
+
+    Args:
+        x (Tensor): Input feature with shape (b, c, hh, hw).
+        scale (int): Downsample ratio.
+
+    Returns:
+        Tensor: the pixel unshuffled feature.
+    """
+    b, c, hh, hw = x.size()
+    out_channel = c * (scale**2)
+    assert hh % scale == 0 and hw % scale == 0
+    h = hh // scale
+    w = hw // scale
+    x_view = x.view(b, c, h, scale, w, scale)
+    return x_view.permute(0, 1, 3, 5, 2, 4).reshape(b, out_channel, h, w)
+
+
 class ResidualDenseBlock(nn.Module):
     """Residual Dense Block.
 
@@ -111,10 +130,18 @@ class RRDBNet(nn.Module):
     def __init__(self,
                  in_channels,
                  out_channels,
+                 scale=4,
                  mid_channels=64,
                  num_blocks=23,
                  growth_channels=32):
         super().__init__()
+        assert scale in [1, 2, 4], "Current code only supports scales of 1, 2, 4"
+        if scale == 2:
+            in_channels = in_channels * 4
+        elif scale == 1:
+            in_channels = in_channels * 16
+
+        self.scale = scale
         self.conv_first = nn.Conv2d(in_channels, mid_channels, 3, 1, 1)
         self.body = make_layer(
             RRDB,
@@ -139,15 +166,21 @@ class RRDBNet(nn.Module):
         Returns:
             Tensor: Forward results.
         """
+        if self.scale == 2:
+            feat = pixel_unshuffle(x, scale=2)
+        elif self.scale == 1:
+            feat = pixel_unshuffle(x, scale=4)
+        else:
+            feat = x
 
-        feat = self.conv_first(x)
+        feat = self.conv_first(feat)
         body_feat = self.conv_body(self.body(feat))
         feat = feat + body_feat
+
         # upsample
-        feat = self.lrelu(
-            self.conv_up1(F.interpolate(feat, scale_factor=2, mode='nearest')))
-        feat = self.lrelu(
-            self.conv_up2(F.interpolate(feat, scale_factor=2, mode='nearest')))
+        feat = self.lrelu(self.conv_up1(F.interpolate(feat, scale_factor=2, mode='nearest')))
+        feat = self.lrelu(self.conv_up2(F.interpolate(feat, scale_factor=2, mode='nearest')))
+
         out = self.conv_last(self.lrelu(self.conv_hr(feat)))
         return out
 
