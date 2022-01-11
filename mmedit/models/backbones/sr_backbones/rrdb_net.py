@@ -3,29 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.runner import load_checkpoint
-
-from mmedit.models.common import default_init_weights, make_layer
+from mmedit.models.common import default_init_weights, make_layer, pixel_unshuffle
 from mmedit.models.registry import BACKBONES
 from mmedit.utils import get_root_logger
-
-
-def pixel_unshuffle(x, scale):
-    """ Pixel unshuffle.
-
-    Args:
-        x (Tensor): Input feature with shape (b, c, hh, hw).
-        scale (int): Downsample ratio.
-
-    Returns:
-        Tensor: the pixel unshuffled feature.
-    """
-    b, c, hh, hw = x.size()
-    out_channel = c * (scale**2)
-    assert hh % scale == 0 and hw % scale == 0
-    h = hh // scale
-    w = hw // scale
-    x_view = x.view(b, c, h, scale, w, scale)
-    return x_view.permute(0, 1, 3, 5, 2, 4).reshape(b, out_channel, h, w)
 
 
 class ResidualDenseBlock(nn.Module):
@@ -135,11 +115,10 @@ class RRDBNet(nn.Module):
                  num_blocks=23,
                  growth_channels=32):
         super().__init__()
-        assert scale in [1, 2, 4], "Current code only supports scales of 1, 2, 4"
-        if scale == 2:
-            in_channels = in_channels * 4
-        elif scale == 1:
-            in_channels = in_channels * 16
+        if scale in [1, 2, 4]:
+            in_channels = in_channels * ((4 // scale)**2)
+        else:
+            raise ValueError('Currently support (1x, 2x, 4x) upsampling only')
 
         self.scale = scale
         self.conv_first = nn.Conv2d(in_channels, mid_channels, 3, 1, 1)
@@ -166,10 +145,8 @@ class RRDBNet(nn.Module):
         Returns:
             Tensor: Forward results.
         """
-        if self.scale == 2:
-            feat = pixel_unshuffle(x, scale=2)
-        elif self.scale == 1:
-            feat = pixel_unshuffle(x, scale=4)
+        if self.scale in [1, 2]:
+            feat = pixel_unshuffle(x, scale=4 // self.scale)
         else:
             feat = x
 

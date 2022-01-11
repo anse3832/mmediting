@@ -145,10 +145,11 @@ def test_discriminator():
 def test_rrdbnet_backbone():
     """Test RRDBNet backbone."""
 
-    # model, initialization and forward (cpu)
+    # x4 model, initialization and forward (cpu)
     net = RRDBNet(
         in_channels=3,
         out_channels=3,
+        scale=4,
         mid_channels=8,
         num_blocks=2,
         growth_channels=4)
@@ -163,6 +164,26 @@ def test_rrdbnet_backbone():
         net = net.cuda()
         output = net(img.cuda())
         assert output.shape == (1, 3, 48, 48)
+
+    # x2 model, initialization and forward (cpu)
+    net = RRDBNet(
+        in_channels=3,
+        out_channels=3,
+        scale=2,
+        mid_channels=8,
+        num_blocks=2,
+        growth_channels=4)
+    net_init_weights(pretrained=None)
+    input_shape = (1, 3, 12, 12)
+    img = _demo_inputs(input_shape)
+    output = net(img)
+    assert output.shape == (1, 3, 24, 24)
+
+    # x2 model forward (gpu)
+    if torch.cuda.is_avaliable():
+        net = net.cuda()
+        output = net(img.cuda())
+        assert output.shape == (1, 3, 24, 24)
 
     with pytest.raises(TypeError):
         # pretrained should be str or None
