@@ -3,7 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.runner import load_checkpoint
-from mmedit.models.common import default_init_weights, make_layer, pixel_unshuffle
+
+from mmedit.models.common import (default_init_weights, make_layer,
+                                  pixel_unshuffle)
 from mmedit.models.registry import BACKBONES
 from mmedit.utils import get_root_logger
 
@@ -155,8 +157,10 @@ class RRDBNet(nn.Module):
         feat = feat + body_feat
 
         # upsample
-        feat = self.lrelu(self.conv_up1(F.interpolate(feat, scale_factor=2, mode='nearest')))
-        feat = self.lrelu(self.conv_up2(F.interpolate(feat, scale_factor=2, mode='nearest')))
+        feat = self.lrelu(
+            self.conv_up1(F.interpolate(feat, scale_factor=2, mode='nearest')))
+        feat = self.lrelu(
+            self.conv_up2(F.interpolate(feat, scale_factor=2, mode='nearest')))
 
         out = self.conv_last(self.lrelu(self.conv_hr(feat)))
         return out

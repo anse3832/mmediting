@@ -173,7 +173,7 @@ def test_rrdbnet_backbone():
     assert output.shape == (1, 3, 24, 24)
 
     # model forward (gpu)
-    if torch.cuda.is_avaliable():
+    if torch.cuda.is_available():
         net = net.cuda()
         output = net(img.cuda())
         assert output.shape == (1, 3, 24, 24)
